@@ -5,12 +5,20 @@ import os
 
 from gpiozero import RGBLED
 from gpiozero import LED
+from gpiozero import DigitalInputDevice
 from datetime import datetime
 from colorzero import Color
 
 PROD = False
 FILENAME = './log.xlsx'
 INTERVAL = 5
+MODULE = {
+    '0000' : 'K095',
+    '0001' : 'UNICONN',
+    '0010' : 'VORTEX VMC 100',
+    '0011' : 'VORTEX VMC 200',
+}
+INSTRUMENT = MODULE['0000']
 
 # modbus rtu communication paramater setup
 BAUDRATE = 9600
@@ -24,6 +32,13 @@ SLAVEID = 1
 if (PROD):
     power_led = LED(4)
     signalling = RGBLED(17,27,22)
+    bit_0 = DigitalInputDevice(18)
+    bit_1 = DigitalInputDevice(23)
+    bit_2 = DigitalInputDevice(24)
+    bit_3 = DigitalInputDevice(25)
+    
+    in_switch = str(int(bit_3)) + str(int(bit_2)) + str(int(bit_1)) + str(int(bit_0))
+    INSTRUMENT = MODULE[in_switch]
 
     device = minimalmodbus.Instrument('/dev/ttyUSB0', SLAVEID)
     device.serial.baudrate = BAUDRATE
@@ -41,10 +56,31 @@ async def get_data():
         data = device.read_registers(30256,110,3)
 
         # Arrange data
-        log = {
-            # "tanggal": datetime.now().strftime("%d/%m/%Y"),
-            "timestamp": datetime.now().isoformat(),
-        }
+        match INSTRUMENT:
+            case "K095":
+                log = {
+                    # "tanggal": datetime.now().strftime("%d/%m/%Y"),
+                    "timestamp": datetime.now().isoformat(),
+                    "live_phase_a_amps" : data[3],
+                    "live_phase_b_amps" : data[4],
+                    "live_phase_c_amps" : data[5],
+                    "live_ac_volts" : data[7],
+                    "calculated_cb_volts" : data[8],
+                    "live_ba_volts" : data[9],
+                    "live_120v_supply_volts" : data[10],
+                    "live_analog_loop_2" : data[11],
+                    "live_analog_loop_1" : data[12],
+                    "live_supply_frequency" : data[13],
+                    "live_backspin_frequency" : data[14],
+                    "live_leg-ground_unbalance" : data[16],
+                    "live_voltage_unbalance" : data[17],
+                    "live_current_unbalance" : data[18],
+                    "average_amps_(all_3_phases)" : data[30],
+                    "average_volts_(all_3_phases)" : data[31],
+                    "power_factor" : data[32],
+                    "kwh_ms" : data[107],
+                    "kwh_ls" : data[108],
+                }
 
         # Write data
         newLog = pd.DataFrame(data=log, columns=log.keys(), index=[0])
